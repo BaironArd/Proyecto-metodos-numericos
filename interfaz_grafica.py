@@ -246,18 +246,9 @@ class InterfazMetodosNumericos:
         tabla_frame = ttk.LabelFrame(frame, text="Tabla de Iteraciones", padding=15)
         tabla_frame.pack(fill='x', pady=(0, 15))
         
-        # Treeview para la tabla
+        # Treeview para la tabla. Las columnas de las variables se ajustan al sistema.
         self.tabla_frame = tabla_frame
-        columnas = ['Iteración'] + [f'x{i+1}' for i in range(10)] + ['Error Abs', 'Error Rel']
-        self.tree = ttk.Treeview(tabla_frame, columns=columnas, show='headings', height=8)
-        for columna in columnas:
-            self.tree.heading(columna, text=columna)
-            self.tree.column(columna, width=80, anchor='center')
-
-        self.scrollbar_tabla = ttk.Scrollbar(tabla_frame, orient='vertical', command=self.tree.yview)
-        self.tree.configure(yscrollcommand=self.scrollbar_tabla.set)
-        self.tree.pack(side='left', fill='both', expand=True)
-        self.scrollbar_tabla.pack(side='right', fill='y')
+        self.configurar_tabla_iteraciones(3)
         
         # Panel de gráfica
         grafica_frame = ttk.LabelFrame(frame, text="Gráfica de Convergencia", padding=15)
@@ -285,6 +276,32 @@ class InterfazMetodosNumericos:
                   command=self.exportar_csv_manual).pack(side='left', padx=5)
         ttk.Button(export_frame, text="📥 Guardar Gráfica", 
                   command=self.guardar_grafica).pack(side='left', padx=5)
+
+    def configurar_tabla_iteraciones(self, cantidad_variables):
+        """Actualiza las columnas de la tabla según el tamaño de la matriz."""
+        columnas = (
+            ['Iteración']
+            + [f'x{i + 1}' for i in range(cantidad_variables)]
+            + ['Error Absoluto', 'Error Relativo']
+        )
+
+        if hasattr(self, 'tree'):
+            self.tree.destroy()
+        if hasattr(self, 'scrollbar_tabla'):
+            self.scrollbar_tabla.destroy()
+
+        self.tree = ttk.Treeview(self.tabla_frame, columns=columnas, show='headings', height=8)
+        for columna in columnas:
+            self.tree.heading(columna, text=columna)
+            ancho = 90 if columna.startswith('Error') else 80
+            self.tree.column(columna, width=ancho, anchor='center')
+
+        self.scrollbar_tabla = ttk.Scrollbar(
+            self.tabla_frame, orient='vertical', command=self.tree.yview
+        )
+        self.tree.configure(yscrollcommand=self.scrollbar_tabla.set)
+        self.tree.pack(side='left', fill='both', expand=True)
+        self.scrollbar_tabla.pack(side='right', fill='y')
 
     def actualizar_entradas(self):
         # Limpiar entradas anteriores
@@ -507,6 +524,7 @@ class InterfazMetodosNumericos:
         
     def mostrar_resultados(self, A, b, x, historial, errores, nombre_metodo, convergencia):
         self.modo_resultados = "metodo"
+        self.configurar_tabla_iteraciones(len(b))
         # Cambiar a pestaña de resultados
         self.notebook.select(2)
         

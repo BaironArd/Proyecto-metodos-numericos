@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+grafica_*.png
+comparacion_*.png
+resultados_*.csv

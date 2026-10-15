@@ -21,7 +21,7 @@ class Colors:
 def formatear_numero(num):
     """Formatea el número a 6 decimales y cambia el punto por coma."""
     return f"{num:.6f}".replace('.', ',')
-
+ 
 def print_colored(text, color=Colors.ENDC):
     """Imprime texto con color."""
     print(f"{color}{text}{Colors.ENDC}")

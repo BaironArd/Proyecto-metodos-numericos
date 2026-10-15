@@ -64,9 +64,9 @@ En la consola, las opciones 1–6 ejecutan los ejercicios precargados, 7 solicit
 
 En la interfaz gráfica:
 
-1. Abre **Ejercicios Precargados** y selecciona un ejercicio, o abre **Ingreso de Datos** para escribir una matriz $A$ y un vector $b$.
+1. Abre **Sistemas lineales**. Los ejercicios precargados y la comparación están a la derecha de la configuración; también puedes ingresar una matriz $A$ y un vector $b$ manualmente.
 2. Elige Jacobi o Seidel y define iteraciones máximas y tolerancia.
-3. Pulsa **Resolver Sistema**. La pestaña **Resultados** presenta el sistema, la solución aproximada, los errores, la tabla por iteración y la gráfica.
+3. Pulsa **Resolver sistema**. Los resultados aparecen debajo de los tres botones de acción; desplázate verticalmente para revisar el sistema, la solución, errores, tabla y gráfica.
 4. Activa la exportación CSV o la animación antes de resolver si necesitas esas salidas.
 
 Para hallar raíces con Bairstow, abre **Raíces (Bairstow)**, ingresa los coeficientes en orden descendente, define `r`, `s`, tolerancia e iteraciones máximas y pulsa **Resolver polinomio**. La pestaña muestra los factores, las raíces y los residuos de cada iteración.
@@ -120,7 +120,7 @@ se ingresan `1, -3, 3, -3, 2`. El programa busca factores cuadráticos de la for
 | Valores iniciales | `r = 1` y `s = -1` por defecto; pueden cambiarse si no converge. |
 | Salida | Factores, raíces aproximadas e historial de `r`, `s`, residuos, correcciones y matriz Jacobiana por iteración. |
 
-La convergencia depende del polinomio y de los valores iniciales. Selecciona una fila del historial para ver el polinomio de la etapa, los coeficientes de la división sintética, el cociente provisional, los residuos, la matriz Jacobiana, la ecuación de corrección, los incrementos y los nuevos valores de `r` y `s`. Si el sistema de corrección se vuelve singular o no se alcanza la tolerancia, la aplicación informa el problema y permite probar otros valores iniciales o más iteraciones. Esta función no modifica ni reemplaza los métodos para sistemas lineales.
+La convergencia depende del polinomio y de los valores iniciales. El resultado se organiza verticalmente en resumen, tabla y desarrollo. La tabla explica cada columna: `Etapa` indica qué factor se busca, `R1` y `R0` son los residuos, `Error máx.` es el mayor valor absoluto de esos residuos y `Δr`/`Δs` son las correcciones aplicadas para obtener los siguientes valores de `r` y `s`. Selecciona una fila para ver las sustituciones numéricas de cada coeficiente `b_i`, los auxiliares `c_i`/`d_i`, el cociente, los residuos, la matriz Jacobiana, la ecuación de corrección y la deflación cuando converge. Si el sistema de corrección se vuelve singular o no se alcanza la tolerancia, la aplicación informa el problema y permite probar otros valores iniciales o más iteraciones. Esta función no modifica ni reemplaza los métodos para sistemas lineales.
 
 ## Validación y límites
 

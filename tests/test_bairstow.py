@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from interfaz_grafica import resolver_bairstow
+from interfaz_grafica import formatear_detalle_bairstow, resolver_bairstow
 
 
 class BairstowTests(unittest.TestCase):
@@ -35,6 +35,18 @@ class BairstowTests(unittest.TestCase):
             atol=1e-10,
         )
         self.assertLessEqual(history[-1]["norma"], 1e-10)
+
+    def test_iteration_explanation_contains_substitutions_and_deflation(self):
+        _, history, _ = resolver_bairstow([1, -3, 3, -3, 2], 100, 1e-10, 1, -1)
+        explanation = formatear_detalle_bairstow(history[1], 1e-10)
+        converged_explanation = formatear_detalle_bairstow(history[-1], 1e-10)
+
+        self.assertIn("b2 = a2 + r·b1 + s·b0", explanation)
+        self.assertIn("c2 =", explanation)
+        self.assertIn("d2 =", explanation)
+        self.assertIn("J numérica", explanation)
+        self.assertIn("r siguiente", explanation)
+        self.assertIn("Deflación:", converged_explanation)
 
     def test_preserves_nonmonic_leading_factor(self):
         roots, _, factors = resolver_bairstow([2, -6, 6, -6, 4], 100, 1e-10, 1, -1)

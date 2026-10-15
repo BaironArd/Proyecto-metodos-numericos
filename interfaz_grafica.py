@@ -22,6 +22,112 @@ def formatear_factor_bairstow(r, s):
     return "".join(terminos)
 
 
+def formatear_polinomio(coeficientes):
+    """Representa coeficientes descendentes como una expresión legible."""
+    grado = len(coeficientes) - 1
+    terminos = []
+    for indice, coeficiente in enumerate(coeficientes):
+        coeficiente = float(coeficiente)
+        potencia = grado - indice
+        if abs(coeficiente) < 1e-14:
+            continue
+
+        magnitud = abs(coeficiente)
+        variable = "" if potencia == 0 else "x" if potencia == 1 else f"x^{potencia}"
+        valor = variable if potencia > 0 and abs(magnitud - 1.0) < 1e-14 else f"{magnitud:.8g}{variable}"
+        if not terminos:
+            terminos.append(f"-{valor}" if coeficiente < 0 else valor)
+        else:
+            signo = "-" if coeficiente < 0 else "+"
+            terminos.append(f" {signo} {valor}")
+    return "".join(terminos) or "0"
+
+
+def formatear_detalle_bairstow(detalle, tolerancia):
+    """Explica numéricamente una iteración completa de Bairstow."""
+    a = detalle["polinomio"]
+    b = detalle["b"]
+    c = detalle["derivada_r"]
+    d = detalle["derivada_s"]
+    grado = len(a) - 1
+    r = detalle["r"]
+    s = detalle["s"]
+    lineas = [
+        f"ETAPA {detalle['etapa']} · ITERACIÓN {detalle['iteracion']}",
+        f"Polinomio original: P(x) = {formatear_polinomio(detalle['polinomio_original'])}",
+        f"Polinomio de esta etapa (normalizado): P(x) = {formatear_polinomio(a)}",
+        f"Se prueba q(x) = x^2 - r*x - s, con r = {r:.10g} y s = {s:.10g}.",
+        "",
+        "1. DIVISIÓN SINTÉTICA: P(x) = q(x)·Q(x) + R1·x + R0",
+        f"b0 = a0 = {a[0]:.10g}",
+    ]
+
+    for indice in range(1, grado + 1):
+        if indice == 1:
+            lineas.append(
+                f"b1 = a1 + r·b0 = {a[1]:.10g} + ({r:.10g})·({b[0]:.10g}) = {b[1]:.10g}"
+            )
+        else:
+            lineas.append(
+                f"b{indice} = a{indice} + r·b{indice - 1} + s·b{indice - 2} "
+                f"= {a[indice]:.10g} + ({r:.10g})·({b[indice - 1]:.10g}) "
+                f"+ ({s:.10g})·({b[indice - 2]:.10g}) = {b[indice]:.10g}"
+            )
+
+    lineas.extend([
+        f"Q(x) = {formatear_polinomio(detalle['cociente'])}",
+        f"R1 = b{grado - 1} = {detalle['residuo_x']:.10g}",
+        f"R0 = b{grado} - r·R1 = {b[-1]:.10g} - ({r:.10g})·({detalle['residuo_x']:.10g}) "
+        f"= {detalle['residuo_constante']:.10g}",
+        "",
+        "2. COEFICIENTES AUXILIARES PARA LAS DERIVADAS",
+        "c0 = 0; d0 = 0; c1 = b0; d1 = 0",
+    ])
+    for indice in range(2, grado + 1):
+        lineas.append(
+            f"c{indice} = b{indice - 1} + r·c{indice - 1} + s·c{indice - 2} "
+            f"= {b[indice - 1]:.10g} + ({r:.10g})·({c[indice - 1]:.10g}) "
+            f"+ ({s:.10g})·({c[indice - 2]:.10g}) = {c[indice]:.10g}"
+        )
+        lineas.append(
+            f"d{indice} = b{indice - 2} + r·d{indice - 1} + s·d{indice - 2} "
+            f"= {b[indice - 2]:.10g} + ({r:.10g})·({d[indice - 1]:.10g}) "
+            f"+ ({s:.10g})·({d[indice - 2]:.10g}) = {d[indice]:.10g}"
+        )
+
+    lineas.extend([
+        "",
+        "3. RESIDUOS Y CRITERIO DE PARADA",
+        f"||R||∞ = max(|R1|, |R0|) = {detalle['norma']:.6e}; tolerancia = {tolerancia:.6e}",
+    ])
+    if detalle["convergio"]:
+        lineas.extend([
+            "Como ||R||∞ ≤ tolerancia, se acepta este factor cuadrático.",
+            f"Factor aceptado: q(x) = {formatear_factor_bairstow(r, s)}",
+        ])
+        if "polinomio_reducido" in detalle:
+            lineas.append(
+                f"Deflación: el siguiente polinomio es Q(x) = "
+                f"{formatear_polinomio(detalle['polinomio_reducido'])}"
+            )
+    else:
+        jacobiano = detalle["jacobiano"]
+        correcciones = detalle["correcciones"]
+        lineas.extend([
+            "Como ||R||∞ > tolerancia, se corrigen r y s con Newton:",
+            f"J = [[c{grado - 1}, d{grado - 1}], "
+            f"[c{grado} - R1 - r·c{grado - 1}, d{grado} - r·d{grado - 1}]]",
+            f"J numérica = [[{jacobiano[0, 0]:.10g}, {jacobiano[0, 1]:.10g}], "
+            f"[{jacobiano[1, 0]:.10g}, {jacobiano[1, 1]:.10g}]]",
+            f"Resolver J·[Δr, Δs] = -[R1, R0] = "
+            f"-[{detalle['residuo_x']:.10g}, {detalle['residuo_constante']:.10g}]",
+            f"Δr = {correcciones[0]:.10g}; Δs = {correcciones[1]:.10g}",
+            f"r siguiente = r + Δr = {r:.10g} + ({correcciones[0]:.10g}) = {detalle['r_nuevo']:.10g}",
+            f"s siguiente = s + Δs = {s:.10g} + ({correcciones[1]:.10g}) = {detalle['s_nuevo']:.10g}",
+        ])
+    return "\n".join(lineas)
+
+
 def resolver_bairstow(coeficientes, iteraciones_maximas, tolerancia, r_inicial, s_inicial):
     """Calcula las raíces de un polinomio real mediante deflación de Bairstow."""
     coeficientes = np.asarray(coeficientes, dtype=float)
@@ -36,6 +142,7 @@ def resolver_bairstow(coeficientes, iteraciones_maximas, tolerancia, r_inicial, 
     if not np.isfinite(r_inicial) or not np.isfinite(s_inicial):
         raise ValueError("Los valores iniciales r y s deben ser finitos.")
 
+    polinomio_original = coeficientes.copy()
     factor_escala = float(coeficientes[0])
     coeficientes = coeficientes / factor_escala
     raices = []
@@ -79,9 +186,13 @@ def resolver_bairstow(coeficientes, iteraciones_maximas, tolerancia, r_inicial, 
             detalle = {
                 "etapa": etapa,
                 "iteracion": iteracion,
+                "polinomio_original": polinomio_original.copy(),
                 "polinomio": coeficientes.copy(),
                 "b": b.copy(),
                 "cociente": b[:-2].copy(),
+                "derivada_r": derivada_r.copy(),
+                "derivada_s": derivada_s.copy(),
+                "factor_escala": factor_escala,
                 "r": r,
                 "s": s,
                 "residuo_x": residuo_x,
@@ -132,6 +243,7 @@ def resolver_bairstow(coeficientes, iteraciones_maximas, tolerancia, r_inicial, 
         raices.extend(((r + discriminante) / 2, (r - discriminante) / 2))
         factores.append(formatear_factor_bairstow(r, s))
         coeficientes = b[:-2].copy()
+        historial[-1]["polinomio_reducido"] = coeficientes.copy()
         etapa += 1
 
     if len(coeficientes) == 3:
@@ -153,7 +265,7 @@ def resolver_bairstow(coeficientes, iteraciones_maximas, tolerancia, r_inicial, 
 class InterfazMetodosNumericos:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aplicativo Profesional de Métodos Numéricos")
+        self.root.title("Métodos Numéricos · Jacobi, Seidel y Bairstow")
         self.root.geometry("1200x800")
         self.root.configure(bg='#f0f0f0')
         
@@ -190,6 +302,7 @@ class InterfazMetodosNumericos:
         self.r_bairstow = tk.DoubleVar(value=1.0)
         self.s_bairstow = tk.DoubleVar(value=-1.0)
         self.entradas_coef_bairstow = []
+        self.areas_desplazables = []
         
         # Crear interfaz
         self.crear_interfaz()
@@ -199,37 +312,77 @@ class InterfazMetodosNumericos:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
         
-        # Pestaña 1: Ingreso de datos
+        # Pestaña 1: Sistemas lineales
         self.pestana_entrada = ttk.Frame(self.notebook)
-        self.notebook.add(self.pestana_entrada, text='📊 Ingreso de Datos')
+        self.notebook.add(self.pestana_entrada, text='Sistemas lineales')
         self.crear_pestana_entrada()
-        
-        # Pestaña 2: Ejercicios precargados
-        self.pestana_ejercicios = ttk.Frame(self.notebook)
-        self.notebook.add(self.pestana_ejercicios, text='📚 Ejercicios Precargados')
-        self.crear_pestana_ejercicios()
-        
-        # Pestaña 3: Resultados
-        self.pestana_resultados = ttk.Frame(self.notebook)
-        self.notebook.add(self.pestana_resultados, text='📈 Resultados')
-        self.crear_pestana_resultados()
 
-        # Pestaña 4: Método de Bairstow
+        # Pestaña 2: Método de Bairstow
         self.pestana_bairstow = ttk.Frame(self.notebook)
         self.notebook.add(self.pestana_bairstow, text='Raíces (Bairstow)')
         self.crear_pestana_bairstow()
 
+        self.root.bind_all('<MouseWheel>', self.desplazar_con_rueda)
+        self.root.bind_all('<Button-4>', self.desplazar_con_rueda_linux)
+        self.root.bind_all('<Button-5>', self.desplazar_con_rueda_linux)
+
+    def registrar_area_desplazable(self, canvas, contenido, scrollbar):
+        self.areas_desplazables.append((canvas, contenido, scrollbar))
+
+    def desplazar_con_rueda(self, evento):
+        widget = self.root.winfo_containing(evento.x_root, evento.y_root)
+        if widget is None:
+            return
+        ruta_widget = str(widget)
+        for canvas, contenido, scrollbar in self.areas_desplazables:
+            rutas_validas = (str(canvas), str(contenido), str(scrollbar))
+            if any(ruta_widget == ruta or ruta_widget.startswith(ruta + '.') for ruta in rutas_validas):
+                unidades = -1 if evento.delta > 0 else 1
+                canvas.yview_scroll(unidades, 'units')
+                return 'break'
+
+    def desplazar_con_rueda_linux(self, evento):
+        widget = self.root.winfo_containing(evento.x_root, evento.y_root)
+        if widget is None:
+            return
+        ruta_widget = str(widget)
+        for canvas, contenido, scrollbar in self.areas_desplazables:
+            rutas_validas = (str(canvas), str(contenido), str(scrollbar))
+            if any(ruta_widget == ruta or ruta_widget.startswith(ruta + '.') for ruta in rutas_validas):
+                unidades = -1 if evento.num == 4 else 1
+                canvas.yview_scroll(unidades, 'units')
+                return 'break'
+
+    def desplazar_a_resultados(self):
+        self.canvas_sistemas.update_idletasks()
+        self.canvas_sistemas.yview_moveto(1.0)
+
     def crear_pestana_bairstow(self):
-        frame = ttk.Frame(self.pestana_bairstow)
-        frame.pack(fill='both', expand=True, padx=20, pady=20)
+        canvas = tk.Canvas(self.pestana_bairstow, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self.pestana_bairstow, orient='vertical', command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+
+        frame = ttk.Frame(canvas, padding=16)
+        canvas_window = canvas.create_window((0, 0), window=frame, anchor='nw')
+        frame.bind(
+            '<Configure>',
+            lambda _event: canvas.configure(scrollregion=canvas.bbox('all'))
+        )
+        canvas.bind(
+            '<Configure>',
+            lambda event: canvas.itemconfigure(canvas_window, width=event.width)
+        )
+        self.registrar_area_desplazable(canvas, frame, scrollbar)
 
         titulo = ttk.Label(
-            frame, text="Cálculo de raíces por el método de Bairstow",
-            style='Header.TLabel', padding=8
+            frame, text="Método de Bairstow · raíces de polinomios",
+            style='Header.TLabel', padding=10
         )
-        titulo.pack(fill='x', pady=(0, 10))
+        titulo.pack(fill='x', pady=(0, 8))
 
-        configuracion = ttk.LabelFrame(frame, text="Polinomio y configuración", padding=8)
+        configuracion = ttk.LabelFrame(frame, text="Entrada y parámetros", padding=8)
         configuracion.pack(fill='x', pady=(0, 8))
 
         ttk.Label(configuracion, text="Grado:").grid(row=0, column=0, sticky='w', padx=5, pady=4)
@@ -277,37 +430,35 @@ class InterfazMetodosNumericos:
         ).grid(row=4, column=0, columnspan=6, pady=(10, 2))
         self.actualizar_coeficientes_bairstow()
 
-        resultados = ttk.LabelFrame(frame, text="Resultados", padding=8)
-        resultados.pack(fill='both', expand=True)
-        self.notebook_resultados_bairstow = ttk.Notebook(resultados)
-        self.notebook_resultados_bairstow.pack(fill='both', expand=True)
-
-        pestana_resumen = ttk.Frame(self.notebook_resultados_bairstow)
-        pestana_iteraciones = ttk.Frame(self.notebook_resultados_bairstow)
-        pestana_desarrollo = ttk.Frame(self.notebook_resultados_bairstow)
-        self.notebook_resultados_bairstow.add(pestana_resumen, text='Resumen')
-        self.notebook_resultados_bairstow.add(pestana_iteraciones, text='Iteraciones')
-        self.notebook_resultados_bairstow.add(pestana_desarrollo, text='Desarrollo detallado')
-        self.pestana_iteraciones_bairstow = pestana_iteraciones
-
+        resumen = ttk.LabelFrame(frame, text="1. Resumen del polinomio y sus raíces", padding=8)
+        resumen.pack(fill='x', pady=(0, 8))
         self.resultado_bairstow = ttk.Label(
-            pestana_resumen, text="Ingresa los coeficientes y pulsa Resolver polinomio.",
-            justify='left', wraplength=1080
+            resumen,
+            text="El resultado aparecerá aquí después de resolver el polinomio.",
+            justify='left', anchor='w', wraplength=1080
         )
-        self.resultado_bairstow.pack(fill='both', expand=True, anchor='nw', padx=10, pady=10)
+        self.resultado_bairstow.pack(fill='x', padx=4, pady=4)
 
+        iteraciones_frame = ttk.LabelFrame(frame, text="2. Iteraciones de Bairstow", padding=8)
+        iteraciones_frame.pack(fill='both', expand=True, pady=(0, 8))
+        ttk.Label(
+            iteraciones_frame,
+            text="Una fila es un intento de factor x²-rx-s. R1 y R0 son los residuos; "
+                 "Error máx. = max(|R1|, |R0|). Δr y Δs corrigen los valores para la fila siguiente.",
+            wraplength=1080, justify='left'
+        ).pack(anchor='w', padx=4, pady=(0, 6))
         columnas = (
-            'Etapa', 'Iter.', 'r actual', 's actual', 'R1', 'R0',
-            'Δr', 'Δs', 'r nuevo', 's nuevo', '||R||∞'
+            'Etapa (factor)', 'Iteración', 'r actual', 's actual', 'R1 (residuo x)',
+            'R0 (residuo cte.)', 'Error máx.', 'Δr', 'Δs', 'r siguiente', 's siguiente'
         )
-        tabla_frame = ttk.Frame(pestana_iteraciones)
+        tabla_frame = ttk.Frame(iteraciones_frame)
         tabla_frame.pack(fill='both', expand=True, padx=5, pady=5)
         self.tabla_bairstow = ttk.Treeview(
             tabla_frame, columns=columnas, show='headings', height=10
         )
         for columna in columnas:
             self.tabla_bairstow.heading(columna, text=columna)
-            self.tabla_bairstow.column(columna, width=110, anchor='center')
+            self.tabla_bairstow.column(columna, width=125, anchor='center', stretch=False)
         scrollbar_y = ttk.Scrollbar(tabla_frame, orient='vertical', command=self.tabla_bairstow.yview)
         scrollbar_x = ttk.Scrollbar(tabla_frame, orient='horizontal', command=self.tabla_bairstow.xview)
         self.tabla_bairstow.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
@@ -317,14 +468,18 @@ class InterfazMetodosNumericos:
         tabla_frame.rowconfigure(0, weight=1)
         tabla_frame.columnconfigure(0, weight=1)
 
+        desarrollo = ttk.LabelFrame(frame, text="3. Proceso detallado de la iteración seleccionada", padding=8)
+        desarrollo.pack(fill='both', expand=True, pady=(0, 8))
         ttk.Label(
-            pestana_desarrollo,
-            text="Selecciona una iteración en la pestaña Iteraciones para consultar sus cálculos.",
-        ).pack(anchor='w', padx=8, pady=(8, 3))
-        detalle_frame = ttk.Frame(pestana_desarrollo)
-        detalle_frame.pack(fill='both', expand=True, padx=5, pady=5)
+            desarrollo,
+            text="Selecciona una fila de la tabla: aquí se sustituyen los valores y se explica "
+                 "la división, los residuos y la actualización.",
+            wraplength=1080, justify='left'
+        ).pack(anchor='w', padx=4, pady=(0, 5))
+        detalle_frame = ttk.Frame(desarrollo)
+        detalle_frame.pack(fill='both', expand=True, padx=4, pady=4)
         self.detalle_texto_bairstow = tk.Text(
-            detalle_frame, height=12, wrap='word', font=('Consolas', 9), state='disabled'
+            detalle_frame, height=18, wrap='word', font=('Consolas', 9), state='disabled'
         )
         detalle_scroll = ttk.Scrollbar(
             detalle_frame, orient='vertical', command=self.detalle_texto_bairstow.yview
@@ -384,46 +539,28 @@ class InterfazMetodosNumericos:
             return
 
         detalle = self.historial_bairstow[int(seleccion[0])]
-        polinomio = ', '.join(f"{valor:.10g}" for valor in detalle["polinomio"])
-        coeficientes_b = ', '.join(f"{valor:.10g}" for valor in detalle["b"])
-        cociente = ', '.join(f"{valor:.10g}" for valor in detalle["cociente"])
-        lineas = [
-            f"Etapa {detalle['etapa']}, iteración {detalle['iteracion']}",
-            f"Polinomio actual (coeficientes descendentes): [{polinomio}]",
-            f"Factor candidato: x^2 - ({detalle['r']:.10g})x - ({detalle['s']:.10g})",
-            "División sintética: b0=a0; b1=a1+r*b0; bi=ai+r*b(i-1)+s*b(i-2)",
-            f"Coeficientes calculados b: [{coeficientes_b}]",
-            f"Cociente provisional (coeficientes): [{cociente}]",
-            f"Residuos: R1={detalle['residuo_x']:.10g}; R0={detalle['residuo_constante']:.10g}",
-            f"Criterio: ||R||inf=max(|R1|,|R0|)={detalle['norma']:.6e}",
-        ]
-
-        if detalle["convergio"]:
-            lineas.append("Convergencia: la norma del residuo alcanzó la tolerancia; se acepta este factor.")
-        else:
-            jacobiano = detalle["jacobiano"]
-            correcciones = detalle["correcciones"]
-            lineas.extend([
-                "Jacobiano J = d(R1, R0)/d(r, s):",
-                f"  [[{jacobiano[0, 0]:.8g}, {jacobiano[0, 1]:.8g}],",
-                f"   [{jacobiano[1, 0]:.8g}, {jacobiano[1, 1]:.8g}]]",
-                "Sistema de corrección: J * [Δr, Δs] = -[R1, R0]",
-                f"Corrección Newton: Δr={correcciones[0]:.10g}; Δs={correcciones[1]:.10g}",
-                f"Actualización: r_nuevo={detalle['r_nuevo']:.10g}; s_nuevo={detalle['s_nuevo']:.10g}",
-            ])
-
         self.detalle_texto_bairstow.configure(state='normal')
         self.detalle_texto_bairstow.delete('1.0', tk.END)
-        self.detalle_texto_bairstow.insert('1.0', '\n'.join(lineas))
+        self.detalle_texto_bairstow.insert(
+            '1.0', formatear_detalle_bairstow(detalle, self.tolerancia_aplicada_bairstow)
+        )
         self.detalle_texto_bairstow.configure(state='disabled')
 
     def resolver_polinomio_bairstow(self):
+        for fila in self.tabla_bairstow.get_children():
+            self.tabla_bairstow.delete(fila)
+        self.resultado_bairstow.config(text="")
+        self.detalle_texto_bairstow.configure(state='normal')
+        self.detalle_texto_bairstow.delete('1.0', tk.END)
+        self.detalle_texto_bairstow.configure(state='disabled')
+
         try:
             coeficientes = [float(entrada.get()) for entrada in self.entradas_coef_bairstow]
+            tolerancia = self.tolerancia_bairstow.get()
             raices, historial, factores = resolver_bairstow(
                 coeficientes,
                 self.iteraciones_bairstow.get(),
-                self.tolerancia_bairstow.get(),
+                tolerancia,
                 self.r_bairstow.get(),
                 self.s_bairstow.get(),
             )
@@ -431,9 +568,8 @@ class InterfazMetodosNumericos:
             messagebox.showerror("No se pudo resolver", str(error))
             return
 
-        for fila in self.tabla_bairstow.get_children():
-            self.tabla_bairstow.delete(fila)
         self.historial_bairstow = historial
+        self.tolerancia_aplicada_bairstow = tolerancia
         for indice, detalle in enumerate(historial):
             correcciones = detalle["correcciones"]
             delta_r = '-' if correcciones is None else f"{correcciones[0]:.3e}"
@@ -441,37 +577,74 @@ class InterfazMetodosNumericos:
             self.tabla_bairstow.insert('', 'end', iid=str(indice), values=(
                 detalle["etapa"], detalle["iteracion"], f"{detalle['r']:.8g}",
                 f"{detalle['s']:.8g}", f"{detalle['residuo_x']:.3e}",
-                f"{detalle['residuo_constante']:.3e}", delta_r, delta_s,
-                f"{detalle['r_nuevo']:.8g}", f"{detalle['s_nuevo']:.8g}",
-                f"{detalle['norma']:.3e}"
+                f"{detalle['residuo_constante']:.3e}", f"{detalle['norma']:.3e}",
+                delta_r, delta_s, f"{detalle['r_nuevo']:.8g}", f"{detalle['s_nuevo']:.8g}"
             ))
 
         if historial:
             self.tabla_bairstow.selection_set('0')
             self.mostrar_detalle_bairstow()
+        else:
+            self.detalle_texto_bairstow.configure(state='normal')
+            self.detalle_texto_bairstow.insert(
+                '1.0',
+                "El polinomio es de grado 2. No se necesitan iteraciones de Bairstow: "
+                "se calculan sus raíces directamente con la fórmula cuadrática."
+            )
+            self.detalle_texto_bairstow.configure(state='disabled')
 
         texto_raices = '\n'.join(
-            f"x{indice + 1} = {self.formatear_raiz_bairstow(raiz)}"
+            f"x{indice + 1} = {self.formatear_raiz_bairstow(raiz)}; "
+            f"|P(x{indice + 1})| = {abs(np.polyval(coeficientes, raiz)):.3e}"
             for indice, raiz in enumerate(raices)
         )
         texto_factores = ' * '.join(f"({factor})" for factor in factores)
         self.resultado_bairstow.config(
-            text=f"Factorización aproximada: {texto_factores}\nRaíces aproximadas:\n{texto_raices}"
+            text=(
+                f"Polinomio: P(x) = {formatear_polinomio(coeficientes)}\n"
+                f"Factorización aproximada: {texto_factores}\n"
+                f"Raíces y residuo |P(x)|:\n{texto_raices}"
+            )
         )
-        self.notebook_resultados_bairstow.select(self.pestana_iteraciones_bairstow)
         
     def crear_pestana_entrada(self):
-        frame = ttk.Frame(self.pestana_entrada)
-        frame.pack(fill='both', expand=True, padx=20, pady=20)
+        self.canvas_sistemas = tk.Canvas(self.pestana_entrada, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(
+            self.pestana_entrada, orient='vertical', command=self.canvas_sistemas.yview
+        )
+        self.canvas_sistemas.configure(yscrollcommand=scrollbar.set)
+        self.canvas_sistemas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+
+        frame = ttk.Frame(self.canvas_sistemas, padding=16)
+        canvas_window = self.canvas_sistemas.create_window((0, 0), window=frame, anchor='nw')
+        frame.bind(
+            '<Configure>',
+            lambda _event: self.canvas_sistemas.configure(
+                scrollregion=self.canvas_sistemas.bbox('all')
+            )
+        )
+        self.canvas_sistemas.bind(
+            '<Configure>',
+            lambda evento: self.canvas_sistemas.itemconfigure(canvas_window, width=evento.width)
+        )
+        self.registrar_area_desplazable(self.canvas_sistemas, frame, scrollbar)
         
         # Título
-        titulo = ttk.Label(frame, text="Ingreso de Sistema de Ecuaciones", 
+        titulo = ttk.Label(frame, text="Sistemas lineales · Gauss-Jacobi y Gauss-Seidel",
                           style='Header.TLabel', padding=15)
         titulo.pack(fill='x', pady=(0, 20))
         
-        # Panel de configuración
-        config_frame = ttk.LabelFrame(frame, text="Configuración", padding=15)
-        config_frame.pack(fill='x', pady=(0, 15))
+        # Configuración y ejercicios comparten una fila de dos paneles.
+        paneles_frame = ttk.Frame(frame)
+        paneles_frame.pack(fill='x', pady=(0, 15))
+        paneles_frame.columnconfigure(0, weight=3)
+        paneles_frame.columnconfigure(1, weight=2)
+
+        config_frame = ttk.LabelFrame(paneles_frame, text="Configuración del método", padding=10)
+        config_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 8))
+        ejercicios_frame = ttk.LabelFrame(paneles_frame, text="Ejercicios precargados", padding=10)
+        ejercicios_frame.grid(row=0, column=1, sticky='nsew', padx=(8, 0))
         
         # Número de variables
         ttk.Label(config_frame, text="Número de variables:").grid(row=0, column=0, sticky='w', padx=5)
@@ -511,6 +684,8 @@ class InterfazMetodosNumericos:
                        variable=self.exportar_csv).grid(row=3, column=0, columnspan=2, sticky='w', pady=5)
         ttk.Checkbutton(config_frame, text="Mostrar animación de convergencia", 
                        variable=self.mostrar_animacion).grid(row=3, column=2, columnspan=2, sticky='w', pady=5)
+
+        self.crear_panel_ejercicios(ejercicios_frame)
         
         # Panel de matriz A
         matriz_frame = ttk.LabelFrame(frame, text="Matriz A (Coeficientes)", padding=15)
@@ -530,26 +705,26 @@ class InterfazMetodosNumericos:
         boton_frame = ttk.Frame(frame)
         boton_frame.pack(fill='x', pady=(10, 0))
         
-        ttk.Button(boton_frame, text="🔄 Actualizar Matriz", 
-                  command=self.actualizar_entradas).pack(side='left', padx=5)
-        ttk.Button(boton_frame, text="🧮 Resolver Sistema", 
-                  command=self.resolver_sistema).pack(side='left', padx=5)
-        ttk.Button(boton_frame, text="🧹 Limpiar", 
-                  command=self.limpiar_entradas).pack(side='left', padx=5)
+        ttk.Button(
+            boton_frame, text="Actualizar matriz", width=20,
+            command=self.actualizar_entradas
+        ).pack(side='left', padx=5)
+        ttk.Button(
+            boton_frame, text="Resolver sistema", width=20,
+            command=self.resolver_sistema
+        ).pack(side='left', padx=5)
+        ttk.Button(
+            boton_frame, text="Limpiar datos", width=20,
+            command=self.limpiar_entradas
+        ).pack(side='left', padx=5)
+
+        self.crear_pestana_resultados(frame)
         
         # Inicializar entradas
         self.actualizar_entradas()
+        self.root.after_idle(lambda: self.canvas_sistemas.yview_moveto(0.0))
         
-    def crear_pestana_ejercicios(self):
-        frame = ttk.Frame(self.pestana_ejercicios)
-        frame.pack(fill='both', expand=True, padx=20, pady=20)
-        
-        # Título
-        titulo = ttk.Label(frame, text="Ejercicios Precargados", 
-                          style='Header.TLabel', padding=15)
-        titulo.pack(fill='x', pady=(0, 20))
-        
-        # Lista de ejercicios
+    def crear_panel_ejercicios(self, frame):
         self.ejercicios = {
             1: {
                 "A": np.array([[4, -1, 1], [-1, 5, -2], [1, 2, 6]], dtype=float), 
@@ -583,44 +758,28 @@ class InterfazMetodosNumericos:
             }
         }
         
-        # Crear botones para cada ejercicio
-        for i in range(1, 4):
-            row_frame = ttk.Frame(frame)
-            row_frame.pack(fill='x', pady=5)
-            
-            for j in range(1, 3):
-                idx = (i-1)*2 + j
-                if idx <= 6:
-                    ej = self.ejercicios[idx]
-                    btn = ttk.Button(row_frame, text=f"{ej['nombre']}", 
-                                   command=lambda x=idx: self.cargar_ejercicio(x))
-                    btn.pack(side='left', fill='x', expand=True, padx=5)
+        frame.columnconfigure(0, weight=1)
+        frame.columnconfigure(1, weight=1)
+        for indice, ejercicio in self.ejercicios.items():
+            fila = (indice - 1) // 2
+            columna = (indice - 1) % 2
+            ttk.Button(
+                frame,
+                text=ejercicio['nombre'],
+                command=lambda numero=indice: self.cargar_ejercicio(numero)
+            ).grid(row=fila, column=columna, sticky='ew', padx=4, pady=4)
+
+        ttk.Button(
+            frame, text="Comparar Jacobi y Seidel", command=self.comparar_metodos
+        ).grid(row=3, column=0, columnspan=2, sticky='ew', padx=4, pady=(8, 2))
         
-        # Botón comparación
-        comp_frame = ttk.Frame(frame)
-        comp_frame.pack(fill='x', pady=20)
-        ttk.Button(comp_frame, text="⚖️ Comparar Métodos (Jacobi vs Seidel)", 
-                  command=self.comparar_metodos).pack(fill='x', padx=50)
-        
-    def crear_pestana_resultados(self):
-        # Crear canvas con scroll
-        canvas = tk.Canvas(self.pestana_resultados)
-        scrollbar = ttk.Scrollbar(self.pestana_resultados, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    def crear_pestana_resultados(self, parent):
+        self.pestana_resultados = ttk.LabelFrame(
+            parent, text="Resultados del sistema", padding=12
         )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        frame = ttk.Frame(scrollable_frame)
-        frame.pack(fill='both', expand=True, padx=20, pady=20)
+        self.pestana_resultados.pack(fill='both', expand=True, pady=(14, 0))
+        frame = ttk.Frame(self.pestana_resultados)
+        frame.pack(fill='both', expand=True)
         
         # Título
         titulo = ttk.Label(frame, text="Resultados", 
@@ -879,7 +1038,7 @@ class InterfazMetodosNumericos:
         ej = self.ejercicios[num]
         
         # Cambiar a pestaña de entrada
-        self.notebook.select(0)
+        self.notebook.select(self.pestana_entrada)
         
         # Configurar parámetros
         n = len(ej["b"])
@@ -918,8 +1077,6 @@ class InterfazMetodosNumericos:
         self.modo_resultados = "metodo"
         self.configurar_tabla_iteraciones(len(b))
         # Cambiar a pestaña de resultados
-        self.notebook.select(2)
-        
         # Mostrar información
         n = len(b)
         sistema_str = "Sistema:\n"
@@ -960,6 +1117,7 @@ class InterfazMetodosNumericos:
         # Mostrar animación si está activado
         if self.mostrar_animacion.get():
             self.mostrar_animacion_convergencia(historial, nombre_metodo)
+        self.root.after_idle(self.desplazar_a_resultados)
         
     def obtener_configuracion_tema(self):
         """Retorna la configuración de colores según el tema seleccionado."""
@@ -1126,8 +1284,6 @@ class InterfazMetodosNumericos:
         self.ultimo_historial = None
         self.ultimo_errores = None
         self.ultimo_metodo = None
-        self.notebook.select(2)
-        
         n = len(x_jacobi)
         comparacion_str = "COMPARACIÓN DE MÉTODOS\n\n"
         comparacion_str += f"{'Variable':<12} {'Gauss-Jacobi':<20} {'Gauss-Seidel':<20} {'Diferencia':<15}\n"
@@ -1144,6 +1300,7 @@ class InterfazMetodosNumericos:
         
         # Crear gráfica comparativa
         self.crear_grafica_comparativa(err_jacobi, err_seidel)
+        self.root.after_idle(self.desplazar_a_resultados)
         
     def crear_grafica_comparativa(self, errores_jacobi, errores_seidel):
         for widget in self.canvas_frame.winfo_children():
